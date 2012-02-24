@@ -1,0 +1,145 @@
+Build: a Manager and a Presentation Shell
+Each process represented by PCB [Process Control Block] -
+	PID - unique process identifier
+	Memory - linked list of pointers to memory blocks (only used if have mem management)
+	Other_Resources - linked list, represents all resources other than main memory
+	Status - status.Type and status.List
+	Creation_Tree - Creation_Tree.Parent and Creation_Tree.Children
+	Priority - (int) process used to run next.
+
+PCB created and destroyed dynamically using Create and Destroy invoked by current running process
+Init process has PCB created automatically when system starts up.
+
+Each resource presented using RCB [Resource Control Block] - includes
+	RID - unique resource identifier
+	Status - resource free (boolean?)
+	Waiting_List - list of processes blocked on this resource
+Resources are static - RCB created by system at startup time
+
+Manager - Create, Destroy, Suspend and Activate
+
+Two operations on resources - Request, Release.
+
+Request(RID) {
+	r = Get_RCB(RID)
+	if r-> Status == 'free' {
+		r->Status = 'allocated'
+		insert(self->Other_Resources, r) // pointer to RCB into list of processes resources
+	} else {
+		self->Status.Type = 'blocked_a' // change resource status to block
+		self->Status.List = r // point to RCB of requested resource
+		remove(RL, self) // self, a process is removed from Ready List of resource
+		insert(r->Waiting_List, self) // and moved to Waiting List
+	}
+	Scheduler()
+}
+
+Release(RID) {
+	r = Get_RCB(RID)
+	remove(self->Other_resources, r) // remove reource from process's source list
+	if Waiting_List == nil { // no process blocked on the resource
+		r->status = 'free' // change resource status
+	} else {
+		remove(r->Waiting_List, q) // remove process at head of Waiting_List
+		q->Status.Type = 'ready_a' or 'ready_s' // process changed to ready
+		q_>Status.List = RL // process inserted into Ready List
+		insert(RL, q)
+	}
+	Scheduler()
+}
+
+Scheduler
+	3 level priority scheduler
+	Use pre-emptive round-robin scheduling within level
+	Time sharing simulated by function call
+	init process -> dummy process, lowest priority; root of process creation tree
+
+Scheduler() {
+   find highest priority process p
+   if (self->priority < p->priority ||
+     self->Status.Type != 'running' ||
+     self == NIL)
+     preempt(p, self)
+ }
+
+I/O processing
+	I/O devices collectively represented as IO
+	RCB - name = IO
+		waiting_list
+
+Request_IO() {
+   self->Status.Type = 'blocked';
+   self->Status.List = IO;
+   remove(RL, self);
+   insert(IO->Waiting_List, self);
+   Scheduler();
+ }
+
+IO_completion() {
+   remove(IO->Waiting_List, p);
+   p->Status.Type = 'ready';
+   p->Status.List = RL;
+   insert(RL, p);
+   Scheduler();
+ }
+
+Required Comments
+=================
+init
+quit
+cr <name> <priority>
+de <name>
+req <resource name> or
+  req <resource name> <# of units>
+rel <resource name> or
+  rel <resource name> <# of units>
+to - time out
+rio - request io
+ioc - io completion
+
+Ready List - priorities:
+2 = “system”
+1 = “user”
+0 = “init”
+
+Time_out() {
+  	find running process q;
+  	remove(RL, q);
+  	q->Status.Type = 'ready';
+ 		insert(RL, q);
+		Scheduler();}
+
+
+Create (initialization parameters) {
+	create PCB data structure
+	initialize PCB using parameters
+	link PCB to creation tree
+	insert(RL, PCB)
+	Scheduler()
+}
+
+Destroy (pid) {
+	get pointer p to PCB using pid
+	Kill_Tree(p)
+	Scheduler()
+}
+
+Kill_Tree(p) {
+	for all child processes q Kill_Tree(q)
+	free resources
+	delete PCB and update all pointers
+}
+
+Summary
+=======
+
+Design/implement the process and resource manager
+data structures and functions
+Design/implement a driver program (shell)
+command language and interpreter
+Instantiate the manager to include at start-up:
+A Ready List with 3 priorities
+A single process, Init
+4 resources labeled: R1, R2, R3, R4 (multiple units for teams: each Ri has i units))
+An IO resource (teams only)
+Submit your program for testing, submit documentation for grading

@@ -45,7 +45,7 @@ type PCB struct {
 
 type RCB struct {
 	RID          int
-	Status       Stat
+	Status       string
 	Waiting_List *list.List
 }
 
@@ -93,13 +93,26 @@ func (p *PCB) Activate(pid int) {
 
 // destroy processes
 func (p *PCB) Destroy(pid int) {
-	pcb = getPCB(pid)
+	pcb := getPCB(pid)
 	killTree(pcb)
 	Scheduler()
 }
 
 // kill creation_tree for given PCB
 func killTree(p *PCB) {
+	for e := p.Creation_Tree.Child.Front(); e != nil; e = e.Next() {
+		killTree(e.Value.(*PCB))
+	}
+	listRemove(p, p.Status.List)
+}
+
+func (p *PCB) Request(rid int) {
+	r := getRCB(rid)
+	if r.Status == "free" {
+		r.Status = "allocated"
+	} else {
+		p.Status.Type = "blocked_a"
+	}
 
 }
 
@@ -122,6 +135,15 @@ func (p *PCB) Request_IO() {
 func newPID() int {
 	GPID += 1
 	return GPID
+}
+
+func getRCB(rid int) *RCB {
+	for e := Resource_List.Front(); e != nil; e = e.Next() {
+		if e.Value.(RCB).RID == rid {
+			return e.Value.(*RCB)
+		}
+	}
+	return nil
 }
 
 // get PCB based on pid by recursing through

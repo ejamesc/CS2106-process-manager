@@ -68,29 +68,6 @@ func (p *PCB) Create(priority int) {
 	Scheduler()
 }
 
-// suspend process
-func (p *PCB) Suspend(pid int) {
-	pcb := getPCB(pid)
-	s := pcb.Status.Type
-	if s == "blocked_a" || s == "blocked_s" {
-		pcb.Status.Type = "blocked_s"
-	} else {
-		pcb.Status.Type = "ready_s"
-	}
-	Scheduler()
-}
-
-// activate process
-func (p *PCB) Activate(pid int) {
-	pcb := getPCB(pid)
-	if pcb.Status.Type == "ready_s" {
-		pcb.Status.Type = "ready_a"
-		Scheduler()
-	} else {
-		pcb.Status.Type = "blocked_a"
-	}
-}
-
 // destroy processes
 func (p *PCB) Destroy(pid int) {
 	pcb := getPCB(pid)
@@ -129,6 +106,7 @@ func (p *PCB) Release(rid int) {
 		r.Waiting_List.Remove(r.Waiting_List.Front())
 		p.Status.Type = "ready_a"
 		p.Status.List = Ready_List
+		listInsert(p, Ready_List)
 	}
 	Scheduler()
 }
@@ -148,7 +126,14 @@ func (p *PCB) Request_IO() {
 	Scheduler()
 }
 
-// returns a new PID from the global var GPID
+func (p *PCB) IO_completion() {
+	listRemove(p, IO.Front().Value.(IO_RCB).Waiting_List)
+	p.Status.Type = "ready"
+	p.Status.List = Ready_List
+	listInsert(p, Ready_List)
+	Scheduler()
+}
+
 func newPID() int {
 	GPID += 1
 	return GPID
@@ -175,7 +160,6 @@ func getPCB(pid int) *PCB {
 	return getChildPCB(ct, pid)
 }
 
-// helper function for getPCB
 func getChildPCB(ls *list.List, pid int) *PCB {
 	if ls == nil {
 		return nil

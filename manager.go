@@ -110,10 +110,27 @@ func (p *PCB) Request(rid int) {
 	r := getRCB(rid)
 	if r.Status == "free" {
 		r.Status = "allocated"
+		p.Other_Resources.PushFront(r) // or pushback?
 	} else {
 		p.Status.Type = "blocked_a"
+		p.Status.List.PushFront(r) // warning, watch this
+		listRemove(p, Ready_List)
+		listInsert(p, r.Waiting_List)
 	}
+	Scheduler()
+}
 
+func (p *PCB) Release(rid int) {
+	r := getRCB(rid)
+	rcbListRemove(r, p.Other_Resources)
+	if r.Waiting_List.Len() == 0 {
+		r.Status = "free"
+	} else {
+		r.Waiting_List.Remove(r.Waiting_List.Front())
+		p.Status.Type = "ready_a"
+		p.Status.List = Ready_List
+	}
+	Scheduler()
 }
 
 // scheduler
@@ -177,7 +194,7 @@ func getChildPCB(ls *list.List, pid int) *PCB {
 	return nil
 }
 
-// removes elements from list
+// removes PCB element from list
 func listRemove(p *PCB, ls *list.List) {
 	for e := ls.Front(); e != nil; e = e.Next() {
 		if e.Value.(PCB).PID == p.PID {
@@ -186,11 +203,18 @@ func listRemove(p *PCB, ls *list.List) {
 	}
 }
 
+// removes RCB element
+func rcbListRemove(r *RCB, ls *list.List) {
+	for e := ls.Front(); e != nil; e = e.Next() {
+		if e.Value.(RCB).RID == r.RID {
+			ls.Remove(e)
+		}
+	}
+}
+
 // inserts process into list
 func listInsert(p *PCB, ls *list.List) {
-	e := new(list.Element)
-	e.Value = p
-	ls.PushFront(e)
+	ls.PushFront(p)
 }
 
 func read(title string) string {

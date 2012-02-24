@@ -14,11 +14,14 @@ import (
 
 var (
 	GPID          = 0
-	Init          = PCB{0, list.New(), CT{nil, list.New()}, Stat{"ready_s", Ready_List}, 0}
+	Init          = PCB{0, "init", list.New(), CT{nil, list.New()}, Stat{"ready_s", Ready_List}, 0}
 	Ready_List    = list.New()
 	Resource_List = list.New()
 	IO            = list.New()
 )
+
+// current running process
+var Curr *PCB
 
 /*// Command flag
 var terminal = flag.Bool("t", false, "use terminal mode for input")
@@ -37,6 +40,7 @@ type CT struct {
 
 type PCB struct {
 	PID             int
+	Name string
 	Other_Resources *list.List
 	Creation_Tree   CT
 	Status          Stat
@@ -56,16 +60,49 @@ type IO_RCB struct {
 // Operations on processes
 
 // create new process
-func (p *PCB) Create(priority int) {
+func (p *PCB) Create(name string, priority int) {
 	newP := PCB{newPID(),
+		name,
 		list.New(),
 		CT{p, list.New()},
 		Stat{"ready_s", Ready_List},
 		priority}
 
 	listInsert(&newP, p.Creation_Tree.Child)
-	listInsert(&newP, Ready_List)
+	listRLInsert(&newP, Ready_List)
 	Scheduler()
+}
+
+func listRLInsert(p *PCB, rl *list.List) {
+	pr := p.Priority
+	var e *list.Element
+
+	switch {
+	case pr == 0:
+		e = rl.Front()
+	case pr == 1:
+		e = rl.Front().Next()
+	case pr == 2:
+		e = rl.Front().Next().Next()
+	}
+	ls := e.Value.(*list.List)
+	ls.PushFront(p)
+}
+
+func listRLRemove(p *PCB, rl *list.List) {
+	pr := p.Priority
+	var e *list.Element
+
+	switch {
+	case pr == 0:
+		e = rl.Front()
+	case pr == 1:
+		e = rl.Front().Next()
+	case pr == 2:
+		e = rl.Front().Next().Next()
+	}
+	ls := e.Value.(*list.List)
+	listRemove(p, ls)
 }
 
 // destroy processes
@@ -73,6 +110,29 @@ func (p *PCB) Destroy(pid int) {
 	pcb := getPCB(pid)
 	killTree(pcb)
 	Scheduler()
+}
+
+// suspend process
+func (p *PCB) Suspend(pid int) {
+	pcb := getPCB(pid)
+	s := pcb.Status.Type
+	if s == "blocked_a" || s == "blocked_s" {
+		pcb.Status.Type = "blocked_s"
+	} else {
+		pcb.Status.Type = "ready_s"
+	}
+	Scheduler()
+}
+
+// activate process
+func (p *PCB) Activate(pid int) {
+	pcb := getPCB(pid)
+	if pcb.Status.Type == "ready_s" {
+		pcb.Status.Type = "ready_a"
+		Scheduler()
+	} else {
+		pcb.Status.Type = "blocked_a"
+	}
 }
 
 // kill creation_tree for given PCB
@@ -91,7 +151,7 @@ func (p *PCB) Request(rid int) {
 	} else {
 		p.Status.Type = "blocked_a"
 		p.Status.List.PushFront(r) // warning, watch this
-		listRemove(p, Ready_List)
+		listRLRemove(p, Ready_List)
 		listInsert(p, r.Waiting_List)
 	}
 	Scheduler()
@@ -106,20 +166,48 @@ func (p *PCB) Release(rid int) {
 		r.Waiting_List.Remove(r.Waiting_List.Front())
 		p.Status.Type = "ready_a"
 		p.Status.List = Ready_List
-		listInsert(p, Ready_List)
+		listRLInsert(p, Ready_List)
 	}
 	Scheduler()
 }
 
 // scheduler
 func Scheduler() {
+	p := maxPriorityPCB()
+	if (Curr.Priority < p.Priority || Curr.Status.Type != "running" || Curr == nil) {
+		preempt(p, Curr)
+	}
+}
 
+func preempt(p, curr *PCB) {
+	if curr == nil {
+		Curr = p
+	}
+	p.Status.Type = "running"
+	fmt.Println("Process %s is running", p.Name)
+}
+
+// find and return the highest priority PCB
+func maxPriorityPCB() *PCB {
+	system := Ready_List.Front()
+	user := system.Next()
+	init := user.Next()
+
+	switch {
+	case system.Value.(*list.List).Len() != 0 :
+		return system.Value.(*list.List).Front().Value.(*PCB)
+	case user.Value.(*list.List).Len() != 0 :
+		return user.Value.(*list.List).Front().Value.(*PCB)
+	case init.Value.(*list.List).Len() > 1 :
+		return init.Value.(*list.List).Front().Value.(*PCB)
+	}
+	return getPCB(0) // return init
 }
 
 func (p *PCB) Request_IO() {
 	p.Status.Type = "blocked_a"
 	p.Status.List = IO
-	listRemove(p, Ready_List)
+	listRLRemove(p, Ready_List)
 
 	iowl := IO.Front().Value.(IO_RCB).Waiting_List
 	listInsert(p, iowl)
@@ -130,7 +218,7 @@ func (p *PCB) IO_completion() {
 	listRemove(p, IO.Front().Value.(IO_RCB).Waiting_List)
 	p.Status.Type = "ready"
 	p.Status.List = Ready_List
-	listInsert(p, Ready_List)
+	listRLInsert(p, Ready_List)
 	Scheduler()
 }
 

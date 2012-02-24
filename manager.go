@@ -13,11 +13,11 @@ import (
 )
 
 var (
-	GPID = 0
-	Init = PCB{0, list.New(), CT{nil, list.New()}, Stat{"ready_s", Ready_List}, 0}
-	Ready_List = list.New()
+	GPID          = 0
+	Init          = PCB{0, list.New(), CT{nil, list.New()}, Stat{"ready_s", Ready_List}, 0}
+	Ready_List    = list.New()
 	Resource_List = list.New()
-	IO = list.New()
+	IO            = list.New()
 )
 
 /*// Command flag
@@ -32,20 +32,20 @@ type Stat struct {
 
 type CT struct {
 	Parent *PCB
-	Child *list.List
+	Child  *list.List
 }
 
 type PCB struct {
-	PID int
+	PID             int
 	Other_Resources *list.List
-	Creation_Tree CT
-	Status Stat
-	Priority int
+	Creation_Tree   CT
+	Status          Stat
+	Priority        int
 }
 
 type RCB struct {
-	RID int
-	Status Stat
+	RID          int
+	Status       Stat
 	Waiting_List *list.List
 }
 
@@ -58,10 +58,10 @@ type IO_RCB struct {
 // create new process
 func (p *PCB) Create(priority int) {
 	newP := PCB{newPID(),
-				list.New(),
-				CT{p, list.New()},
-				Stat{"ready_s", Ready_List},
-				priority}
+		list.New(),
+		CT{p, list.New()},
+		Stat{"ready_s", Ready_List},
+		priority}
 
 	listInsert(&newP, p.Creation_Tree.Child)
 	listInsert(&newP, Ready_List)
@@ -91,6 +91,18 @@ func (p *PCB) Activate(pid int) {
 	}
 }
 
+// destroy processes
+func (p *PCB) Destroy(pid int) {
+	pcb = getPCB(pid)
+	killTree(pcb)
+	Scheduler()
+}
+
+// kill creation_tree for given PCB
+func killTree(p *PCB) {
+
+}
+
 // scheduler
 func Scheduler() {
 
@@ -106,6 +118,7 @@ func (p *PCB) Request_IO() {
 	Scheduler()
 }
 
+// returns a new PID from the global var GPID
 func newPID() int {
 	GPID += 1
 	return GPID
@@ -170,7 +183,6 @@ func read(title string) string {
 func main() {
 	//flag.Parse()
 	in := ""
-
 
 	/*if *terminal {
 		// REPL mode

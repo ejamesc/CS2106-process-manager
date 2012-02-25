@@ -75,8 +75,11 @@ func (p *PCB) Create(name string, priority int) os.Error {
 // destroy process
 func (p *PCB) Destroy(pid string) {
 	pcb := getPCB(pid)
-
-	killTree(pcb)
+	if pcb != Init {
+		killTree(pcb)
+	} else {
+		fmt.Println("init cannot be destroyed")
+	}
 	Scheduler()
 }
 
@@ -107,34 +110,84 @@ func killTree(p *PCB) {
 	}
 	parent := p.Creation_Tree.Parent
 	listRemove(p, parent.Creation_Tree.Child)
-	// need to call release on all resources
+
+	// release all resources associated with p
+	for e := p.Other_Resources.Front(); e != nil; e = e.Next() {
+		p.Release(e.Value.(*RCB).RID)
+	}
+
 	PIDs[p.PID] = nil, false
+}
+
+func (p *PCB) Request(rid string) {
+	if p == Init {
+		fmt.Println("init not allowed to request resource")
+		return
+	}
+	r := getRCB(rid)
+	if r.Status == "free" {
+		r.Status = "allocated"
+		p.Other_Resources.PushBack(r)
+	} else {
+		r.Waiting_List.PushBack(p)
+		listRLRemove(p)
+		p.Status.Type = "blocked_a"
+		p.Status.List = r.Waiting_List
+	}
+	Scheduler()
+}
+
+func (p *PCB) Release(rid string) {
+	r := getRCB(rid)
+	rcbListRemove(r, p.Other_Resources)
+	if r.Waiting_List.Len() == 0 {
+		r.Status = "free"
+	} else {
+		r.Waiting_List.Remove(r.Waiting_List.Front()) // remove front
+		p.Status.Type = "ready_a"
+		p.Status.List = Ready_List
+		listRLInsert(p)
+	}
+	Scheduler()
+}
+
+// timeout function
+func (p *PCB) Time_out() {
+	listRLInsert(Curr) // place pointer to Curr running p back into RL
+	Curr.Status.Type = "ready"
+	Curr = nil
+	Scheduler()
 }
 
 func Scheduler() {
 	p := maxPriorityPCB()
 	fmt.Println("Top process:", p.PID)
-	if Curr == nil || Curr.Priority < p.Priority || Curr.Status.Type != "running"{
+	if Curr == nil || Curr.Status.Type != "running" || Curr.Priority < p.Priority {
+		if Curr.Status.Type != "running" {
+			fmt.Printf("Process %s blocked; ", Curr.PID)
+		}
 		preempt(p, Curr)
 	}
-	// print here, in case preempt does not occur
+	// print state
 	fmt.Printf("Process %s is running\n", Curr.PID)
+	showRL()
 }
 
 // replaces curr with p
 func preempt(p, prev *PCB) {
 	if prev != nil {
 		prev.Status.Type = "ready_a"
-		if prev.Status.List != Ready_List {
+		if prev != Init { // edge case, init doesn't need to be re-added to RL
 			listRLInsert(prev)
 		}
 	}
+
 	Curr = p
 	p.Status.Type = "running"
-
 	listRLRemove(p)
 }
 
+// temp function
 func showRL() {
 	system := Ready_List.Front()
 	user := system.Next()
@@ -189,7 +242,7 @@ func main() {
 		i = strings.TrimSpace(i)
 
 		if i == "quit" && len(strings.Split(i, " ")) == 1 {
-			fmt.Println("Exiting")
+			fmt.Println("process terminated")
 			break
 		}
 		Manager(i)
@@ -207,6 +260,7 @@ func initialize() {
 		Stat{"ready_s", Ready_List},
 		0}
 	Curr = Init
+	PIDs["init"] = Init
 
 	Ready_List.PushFront(list.New())
 	Ready_List.PushFront(list.New())
@@ -219,7 +273,7 @@ func initialize() {
 	Resource_List.PushFront(&RCB{"R3", "free", list.New()})
 
 	IO.PushFront(IO_RCB{list.New()})
-	fmt.Println(" ... done")
+	fmt.Println(" ... done\nProcess init is running")
 }
 
 // handles commands and dispatches the appropirate ops
@@ -235,6 +289,10 @@ func Manager(cmd string) {
 		}
 	case ins == "de" && len(cmds) == 2:
 		Curr.Destroy(cmds[1])
+	case ins == "req" && len(cmds) == 2:
+		Curr.Request(cmds[1])
+	case ins == "rel" && len(cmds) == 2:
+		Curr.Release(cmds[1])
 	default:
 		fmt.Println("Unknown command")
 	}
@@ -284,9 +342,26 @@ func listRemove(p *PCB, ls *list.List) {
 	}
 }
 
+func rcbListRemove(r *RCB, ls *list.List) {
+	for e := ls.Front(); e != nil; e = e.Next() {
+		if e.Value.(*RCB).RID == r.RID {
+			ls.Remove(e)
+		}
+	}
+}
+
 func getPCB(name string) *PCB {
 	if res, ok := PIDs[name]; ok {
 		return res
+	}
+	return nil
+}
+
+func getRCB(rid string) *RCB {
+	for e := Resource_List.Front(); e != nil; e = e.Next() {
+		if e.Value.(*RCB).RID == rid {
+			return e.Value.(*RCB)
+		}
 	}
 	return nil
 }

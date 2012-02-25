@@ -82,15 +82,21 @@ func (p *PCB) Destroy(pid string) {
 
 // kill creation_tree for given PCB
 func killTree(p *PCB) {
-	for e := p.Creation_Tree.Child.Front(); e != nil; e = e.Next() {
-		fmt.Println(e.Value.(*PCB).PID)
-		killTree(e.Value.(*PCB))
+	c := p.Creation_Tree.Child
+	children := make([]*PCB, c.Len())
+
+	for e := c.Front(); e != nil; e = e.Next() {
+		children = append(children, e.Value.(*PCB))
+	}
+
+	for _, chld := range children {
+		if chld != nil {
+			killTree(chld)
+		}
 	}
 
 	if p.Status.List == Ready_List {
-		fmt.Println("Delete from RL", p.PID)
 		listRLRemove(p)
-		showRL()
 	} else {
 		listRemove(p, p.Status.List)
 	}
@@ -144,8 +150,6 @@ func maxPriorityPCB() *PCB {
 	system := Ready_List.Front()
 	user := system.Next()
 	init := user.Next()
-
-	showRL()
 
 	switch {
 	// get top process from priority level 2

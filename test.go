@@ -39,7 +39,7 @@ type IO_RCB struct {
 }
 
 // Operations on processes
-// init for PCB
+// init for PCB, rarely used
 func (p *PCB) Init() *PCB {
 	p.PID = ""
 	p.Other_Resources = list.New()
@@ -119,6 +119,7 @@ func killTree(p *PCB) {
 	PIDs[p.PID] = nil, false
 }
 
+// request a resource
 func (p *PCB) Request(rid string) {
 	if p == Init {
 		fmt.Println("init not allowed to request resource")
@@ -131,12 +132,14 @@ func (p *PCB) Request(rid string) {
 	} else {
 		r.Waiting_List.PushBack(p)
 		listRLRemove(p)
+		fmt.Printf("Process %s blocked; ", Curr.PID)
 		p.Status.Type = "blocked_a"
 		p.Status.List = r.Waiting_List
 	}
 	Scheduler()
 }
 
+// release a resource
 func (p *PCB) Release(rid string) {
 	r := getRCB(rid)
 	rcbListRemove(r, p.Other_Resources)
@@ -159,13 +162,12 @@ func (p *PCB) Time_out() {
 	Scheduler()
 }
 
+// calculates which process to run next
+// also prints state
 func Scheduler() {
 	p := maxPriorityPCB()
 	fmt.Println("Top process:", p.PID)
 	if Curr == nil || Curr.Status.Type != "running" || Curr.Priority < p.Priority {
-		if Curr.Status.Type != "running" {
-			fmt.Printf("Process %s blocked; ", Curr.PID)
-		}
 		preempt(p, Curr)
 	}
 	// print state
@@ -173,7 +175,8 @@ func Scheduler() {
 	showRL()
 }
 
-// replaces curr with p
+// preempt function used in scheduler
+// replaces Curr running process with p
 func preempt(p, prev *PCB) {
 	if prev != nil {
 		prev.Status.Type = "ready_a"
@@ -199,6 +202,7 @@ func showRL() {
 }
 
 // find and return the highest priority PCB
+// note that Curr, the current running PCB is not in the RL
 func maxPriorityPCB() *PCB {
 	system := Ready_List.Front()
 	user := system.Next()
@@ -218,16 +222,17 @@ func maxPriorityPCB() *PCB {
 	return Init // return init
 }
 
-// Variables
-// current running process
+// Global Variables
+// current running process and init process
 var Curr, Init *PCB
 var (
-	PIDs          = make(map[string]*PCB) // keeps tracks of PIDs
+	PIDs          = make(map[string]*PCB) // keeps track of all processes
 	Ready_List    = list.New()
 	Resource_List = list.New()
 	IO            = list.New()
 )
 
+// main program
 func main() {
 	i := ""
 	var err os.Error
@@ -253,6 +258,14 @@ func main() {
 // set up all the structs needed for the program to run
 func initialize() {
 	fmt.Print("init")
+
+	// clear the global lists
+	Ready_List.Init()
+	Resource_List.Init()
+	IO.Init()
+
+	PIDs = make(map[string]*PCB)
+
 	Init = &PCB{
 		"init",
 		list.New(),
@@ -276,7 +289,7 @@ func initialize() {
 	fmt.Println(" ... done\nProcess init is running")
 }
 
-// handles commands and dispatches the appropirate ops
+// handles commands and dispatches the appropirate operations
 func Manager(cmd string) {
 	cmds := strings.Split(cmd, " ")
 
@@ -293,13 +306,17 @@ func Manager(cmd string) {
 		Curr.Request(cmds[1])
 	case ins == "rel" && len(cmds) == 2:
 		Curr.Release(cmds[1])
+	case ins == "to" && len(cmds) == 1:
+		Curr.Time_out()
+	case ins == "init" && len(cmds) == 1:
+		initialize()
 	default:
 		fmt.Println("Unknown command")
 	}
 
 }
 
-// Calculates where to place processes on the RL
+// calculates where to place processes on the RL
 func listRLInsert(p *PCB) {
 	pr := p.Priority
 	var e *list.Element
@@ -316,7 +333,7 @@ func listRLInsert(p *PCB) {
 	ls.PushBack(p)
 }
 
-// Removes RL
+// removes process from the RL
 func listRLRemove(p *PCB) {
 	pr := p.Priority
 	var e *list.Element
@@ -333,7 +350,7 @@ func listRLRemove(p *PCB) {
 	listRemove(p, ls)
 }
 
-// removes PCB element from list
+// removes PCB element from a linked list
 func listRemove(p *PCB, ls *list.List) {
 	for e := ls.Front(); e != nil; e = e.Next() {
 		if e.Value.(*PCB).PID == p.PID {
@@ -342,6 +359,7 @@ func listRemove(p *PCB, ls *list.List) {
 	}
 }
 
+// removes RCB element from a linked list
 func rcbListRemove(r *RCB, ls *list.List) {
 	for e := ls.Front(); e != nil; e = e.Next() {
 		if e.Value.(*RCB).RID == r.RID {
@@ -350,6 +368,7 @@ func rcbListRemove(r *RCB, ls *list.List) {
 	}
 }
 
+// returns PCB item given PID
 func getPCB(name string) *PCB {
 	if res, ok := PIDs[name]; ok {
 		return res
@@ -357,6 +376,7 @@ func getPCB(name string) *PCB {
 	return nil
 }
 
+// returns RCB item given RID
 func getRCB(rid string) *RCB {
 	for e := Resource_List.Front(); e != nil; e = e.Next() {
 		if e.Value.(*RCB).RID == rid {

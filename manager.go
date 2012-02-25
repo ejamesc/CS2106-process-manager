@@ -7,6 +7,8 @@ This program is written in Go, Google's system language.
 
 import (
 	"fmt"
+	"bufio"
+	"os"
 	"strings"
 	"strconv"
 	//"flag"
@@ -15,7 +17,6 @@ import (
 )
 
 var (
-	GPID          = 0
 	Ready_List    = list.New()
 	Resource_List = list.New()
 	IO            = list.New()
@@ -58,6 +59,14 @@ type IO_RCB struct {
 }
 
 // Operations on processes
+func (p *PCB) Init() *PCB {
+	p.PID = ""
+	p.Other_Resources = list.New()
+	p.Creation_Tree = CT{p, list.New()}
+	p.Status = Stat{"ready_s", Ready_List}
+	p.Priority = 0
+	return p
+}
 
 // create new process
 func (p *PCB) Create(name string, priority int) {
@@ -141,9 +150,10 @@ func (p *PCB) Release(rid string) {
 // scheduler
 func Scheduler() {
 	p := maxPriorityPCB()
+	fmt.Println(p.PID)
 	if Curr.Priority < p.Priority || Curr.Status.Type != "running" || Curr == nil {
 		preempt(p, Curr)
-		fmt.Println("Process %s is running", p.PID)
+		fmt.Printf("Process %s is running\n", p.PID)
 	}
 }
 
@@ -152,7 +162,7 @@ func preempt(p, curr *PCB) {
 		Curr = p
 	}
 	p.Status.Type = "running"
-	fmt.Println("Process %s is running", p.PID)
+	fmt.Printf("Process %s is running\n", p.PID)
 }
 
 // find and return the highest priority PCB
@@ -304,8 +314,6 @@ func Manager(cmd string) {
 			Curr.Request_IO()
 		case ins == "ioc" && len(cmds) == 1:
 			Curr.IO_completion()
-		case ins == "quit" && len(cmds) == 1:
-			break
 		default:
 			fmt.Println("Unknown command")
 	}
@@ -320,25 +328,54 @@ func read(title string) string {
 	return string(body)
 }
 
-func main() {
-	//flag.Parse()
-
-	// initialize process
-	Init = &PCB{
+// setup all the data structures
+func initialize() {
+	Init = *PCB{
 		"init",
 		list.New(),
 		CT{nil, list.New()},
 		Stat{"ready_s", Ready_List},
 		0}
+	Curr = Init
 
+	Ready_List.PushFront(list.New())
+	Ready_List.PushFront(list.New())
+	Ready_List.PushFront(list.New())
 
+	listRLInsert(Init, Ready_List)
 
+	Resource_List.PushFront(&RCB{"R1", "free", list.New()})
+	Resource_List.PushFront(&RCB{"R2", "free", list.New()})
+	Resource_List.PushFront(&RCB{"R3", "free", list.New()})
+
+	IO.PushFront(IO_RCB{list.New()})
+}
+
+func main() {
+	//flag.Parse()
+	i := ""
+	var err os.Error
+	in := bufio.NewReader(os.Stdin)
+
+	// initialize process
+	initialize()
+
+	for {
+		i, err = in.ReadString('\n')
+		i = strings.TrimSpace(i)
+		if err != nil {
+			fmt.Println("Read error: ", err)
+		}
+		if i == "quit" && len(strings.Split(i, " ")) == 1 {
+			fmt.Println("Exiting")
+			break
+		}
+		Manager(i)
+	}
 	/*if *terminal {
 		// REPL mode
 
 	} else {
 		// read file mode
 	}*/
-
-	fmt.Println("hello")
 }

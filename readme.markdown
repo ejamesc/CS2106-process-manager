@@ -1,6 +1,6 @@
 ##CS2106 Project: Process and Resource Management
 
-Implement a portion of the kernel that deals with management of processes and resources. NUS CS2106 Operating Systems project 1
+Implement a portion of the kernel that deals with management of processes and resources.
 
 Implement the following:
 

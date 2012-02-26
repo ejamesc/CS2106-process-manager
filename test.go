@@ -142,14 +142,15 @@ func (p *PCB) Request(rid string) {
 // release a resource
 func (p *PCB) Release(rid string) {
 	r := getRCB(rid)
-	rcbListRemove(r, p.Other_Resources)
+	pcb := r.Waiting_List.Front().Value.(*PCB)
+	rcbListRemove(r, pcb.Other_Resources)
 	if r.Waiting_List.Len() == 0 {
 		r.Status = "free"
 	} else {
 		r.Waiting_List.Remove(r.Waiting_List.Front()) // remove front
-		p.Status.Type = "ready_a"
-		p.Status.List = Ready_List
-		listRLInsert(p)
+		pcb.Status.Type = "ready_a"
+		pcb.Status.List = Ready_List
+		listRLInsert(pcb)
 	}
 	Scheduler()
 }
@@ -157,9 +158,35 @@ func (p *PCB) Release(rid string) {
 // timeout function
 func (p *PCB) Time_out() {
 	listRLInsert(Curr) // place pointer to Curr running p back into RL
-	Curr.Status.Type = "ready"
+	Curr.Status.Type = "ready_a"
 	Curr = nil
 	Scheduler()
+}
+
+// request IO resource
+func (p *PCB) Request_IO() {
+	p.Status.Type = "blocked_a"
+	p.Status.List = IO.Waiting_List
+	listRLRemove(p)
+	fmt.Printf("Process %s blocked;", p.PID)
+
+	iowl := IO.Waiting_List
+	iowl.PushBack(p)
+	Scheduler()
+}
+
+// IO release
+func (p *PCB) IO_completion() {
+	if IO.Waiting_List.Len() != 0 {
+		pcb := IO.Waiting_List.Front().Value.(*PCB)
+		listRemove(pcb, IO.Waiting_List)
+		pcb.Status.Type = "ready"
+		pcb.Status.List = Ready_List
+		listRLInsert(pcb)
+		Scheduler()
+	} else {
+		fmt.Println("No processes on IO")
+	}
 }
 
 // calculates which process to run next
@@ -179,9 +206,11 @@ func Scheduler() {
 // replaces Curr running process with p
 func preempt(p, prev *PCB) {
 	if prev != nil {
-		prev.Status.Type = "ready_a"
-		if prev != Init { // edge case, init doesn't need to be re-added to RL
-			listRLInsert(prev)
+		if prev.Status.Type != "blocked_a" {
+			prev.Status.Type = "ready_a"
+			if prev != Init { // edge case, init doesn't need to be re-added to RL
+				listRLInsert(prev)
+			}
 		}
 	}
 
@@ -196,9 +225,29 @@ func showRL() {
 	user := system.Next()
 	init := user.Next()
 
-	fmt.Println("Level 2:", system.Value.(*list.List).Len())
-	fmt.Println("Level 1:", user.Value.(*list.List).Len())
-	fmt.Println("Level 0:", init.Value.(*list.List).Len())
+	syslen := system.Value.(*list.List).Len()
+	usrlen := user.Value.(*list.List).Len()
+	initlen := init.Value.(*list.List).Len()
+
+	fmt.Print("\nLevel 2:", syslen)
+	if syslen > 0 {
+		for e := system.Value.(*list.List).Front(); e != nil; e = e.Next() {
+			fmt.Printf(" %s,", e.Value.(*PCB).PID)
+		}
+	}
+	fmt.Print("\nLevel 1:", usrlen)
+	if usrlen > 0 {
+		for e := user.Value.(*list.List).Front(); e != nil; e = e.Next() {
+			fmt.Printf(" %s,", e.Value.(*PCB).PID)
+		}
+	}
+	fmt.Print("\nLevel 0:", initlen)
+	if initlen > 0 {
+		for e := init.Value.(*list.List).Front(); e != nil; e = e.Next() {
+			fmt.Printf(" %s,", e.Value.(*PCB).PID)
+		}
+		fmt.Println(" ")
+	}
 }
 
 // find and return the highest priority PCB
@@ -225,11 +274,11 @@ func maxPriorityPCB() *PCB {
 // Global Variables
 // current running process and init process
 var Curr, Init *PCB
+var IO *IO_RCB
 var (
 	PIDs          = make(map[string]*PCB) // keeps track of all processes
 	Ready_List    = list.New()
 	Resource_List = list.New()
-	IO            = list.New()
 )
 
 // main program
@@ -262,7 +311,8 @@ func initialize() {
 	// clear the global lists
 	Ready_List.Init()
 	Resource_List.Init()
-	IO.Init()
+
+	IO = &IO_RCB{list.New()}
 
 	PIDs = make(map[string]*PCB)
 
@@ -285,7 +335,6 @@ func initialize() {
 	Resource_List.PushFront(&RCB{"R2", "free", list.New()})
 	Resource_List.PushFront(&RCB{"R3", "free", list.New()})
 
-	IO.PushFront(IO_RCB{list.New()})
 	fmt.Println(" ... done\nProcess init is running")
 }
 
@@ -310,6 +359,10 @@ func Manager(cmd string) {
 		Curr.Time_out()
 	case ins == "init" && len(cmds) == 1:
 		initialize()
+	case ins == "rio" && len(cmds) == 1:
+		Curr.Request_IO()
+	case ins == "ioc" && len(cmds) == 1:
+		Curr.IO_completion()
 	default:
 		fmt.Println("Unknown command")
 	}

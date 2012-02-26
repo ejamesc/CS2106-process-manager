@@ -4,10 +4,11 @@ Implement a portion of the kernel that deals with management of processes and re
 
 Implement the following:
 
-* Process: create/destroy
+```* Process: create/destroy
 * Resource: request/release
 * Time-out interrupt
 * A presentation shell
+```
 
 Build it in whatever language you want. (So I chose Go)
 
@@ -17,5 +18,6 @@ This program is written in Go r60.3.
 Compiled using the 6g compiler version release.r60.3 9516+ on Darwin
 
 Usage:
+
 	./6.out      (file mode)
 	./6.out -t   (REPL mode)

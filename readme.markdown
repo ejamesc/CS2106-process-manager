@@ -11,9 +11,9 @@ Implement the following:
 
 Build it in whatever language you want. (So I chose Go)
 
-Matriculation number: U096996N
-CS2106 Project Assignment 1
-This program is written in Go r60.3.
+Matriculation number: U096996N  
+CS2106 Project Assignment 1  
+This program is written in Go r60.3.  
 Compiled using the 6g compiler version release.r60.3 9516+ on Darwin
 
 Usage:

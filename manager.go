@@ -334,7 +334,7 @@ func main() {
 			}
 			if error != nil {
 				fmt.Println("Readline error:", error)
-				break
+				panic(error)
 			}
 		}
 		// initialize the kernel environment

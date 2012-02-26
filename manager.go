@@ -5,6 +5,8 @@ import (
 	"bufio"
 	"flag"
 	"os"
+	"io"
+	"path"
 	"strings"
 	"strconv"
 	"container/list"
@@ -49,14 +51,14 @@ type IO_RCB struct {
 }
 
 // Global Variables
-// current running process and init process
-var Curr, Init *PCB
-var IO *IO_RCB
-var terminal = flag.Bool("t", false, "use terminal mode for input")
 var (
 	PIDs          = make(map[string]*PCB) // keeps track of all processes
 	Ready_List    = list.New()
 	Resource_List = list.New()
+	Curr, Init *PCB // current running process, and init process
+	IO *IO_RCB
+	terminal = flag.Bool("t", false, "use terminal mode for input")
+	output string
 )
 
 // Operations on processes
@@ -101,6 +103,7 @@ func (p *PCB) Destroy(pid string) {
 		killTree(pcb)
 	} else {
 		fmt.Println("init cannot be destroyed")
+		output += "init cannot be destroyed\n"
 	}
 	Scheduler()
 }
@@ -145,6 +148,7 @@ func killTree(p *PCB) {
 func (p *PCB) Request(rid string) {
 	if p == Init {
 		fmt.Println("init not allowed to request resource")
+		output += "init not allowed to request resource\n"
 		return
 	}
 	r := getRCB(rid)
@@ -155,6 +159,7 @@ func (p *PCB) Request(rid string) {
 		r.Waiting_List.PushBack(p)
 		listRLRemove(p)
 		fmt.Printf("Process %s blocked; ", Curr.PID)
+		output += fmt.Sprintf("Process %s blocked; ", Curr.PID)
 		p.Status.Type = "blocked_a"
 		p.Status.List = r.Waiting_List
 	}
@@ -197,6 +202,7 @@ func (p *PCB) Request_IO() {
 	p.Status.List = IO.Waiting_List
 	listRLRemove(p)
 	fmt.Printf("Process %s blocked;", p.PID)
+	output += fmt.Sprintf("Process %s blocked;", p.PID)
 
 	iowl := IO.Waiting_List
 	iowl.PushBack(p)
@@ -214,6 +220,7 @@ func (p *PCB) IO_completion() {
 		Scheduler()
 	} else {
 		fmt.Println("No processes on IO")
+		output += "No processes on IO"
 	}
 }
 
@@ -225,6 +232,7 @@ func Scheduler() {
 		preempt(p, Curr)
 	}
 	fmt.Printf("Process %s is running\n", Curr.PID)
+	output += fmt.Sprintf("Process %s is running\n", Curr.PID)
 }
 
 // preempt function used in scheduler
@@ -293,29 +301,29 @@ func main() {
 			}
 			Manager(i)
 		}
-	// file mode
+	// File mode
 	} else {
 		var (
 			tmp        string
 			error, err os.Error
 			file       *os.File
 			lines      []string
-			path       string
+			filepath       string
 		)
 
 		// get the file path
-		path, err = in.ReadString('\n')
+		filepath, err = in.ReadString('\n')
 		if err != nil {
 			fmt.Println("Read error:", err)
 		}
+		filepath = strings.TrimSpace(filepath)
 		// open the file
-		path = strings.TrimSpace(path)
-		if file, err = os.Open(path); err != nil {
+		if file, err = os.Open(filepath); err != nil {
 			fmt.Println("File open error:", err)
 		}
 		// declare a new file reader
 		reader := bufio.NewReader(file)
-		// load each command into a slice named line
+		// load each command into a slice named lines
 		for {
 			if tmp, error = reader.ReadString('\n'); error == nil {
 				tmp = strings.TrimSpace(tmp)
@@ -335,6 +343,17 @@ func main() {
 		for _, v := range lines {
 			Manager(v)
 		}
+		dirpath, _ := path.Split(filepath)
+		fl, flErr := os.OpenFile(path.Join(dirpath, "U096996N.txt"), os.O_RDWR|os.O_CREATE, 0666)
+		if flErr != nil {
+			fmt.Println("File write error:", flErr)
+		}
+		defer fl.Close()
+		// for each output, write it
+		_, wErr := io.WriteString(fl, output) // write
+		if wErr != nil {
+				fmt.Println("Write error:", wErr)
+			}
 	}
 
 }
@@ -343,6 +362,7 @@ func main() {
 // set up all the structs needed for the program to run
 func initialize() {
 	fmt.Print("init")
+	output += "init"
 
 	// clear the global lists
 	Ready_List.Init()
@@ -373,6 +393,7 @@ func initialize() {
 	Resource_List.PushFront(&RCB{"R4", "free", list.New()})
 
 	fmt.Println(" ... done\nProcess init is running")
+	output += " ... done\n\nProcess init is running\n"
 }
 
 // handles commands and dispatches the appropirate operations
@@ -403,7 +424,8 @@ func Manager(cmd string) {
 	case ins == "" && len(cmds) == 1:
 		fmt.Println("")
 	case ins == "quit" && len(cmds) == 1:
-		fmt.Println("process terminated")
+		fmt.Println("Process terminated")
+		output += "Process terminated\n"
 		break
 	default:
 		fmt.Println("Unknown command")

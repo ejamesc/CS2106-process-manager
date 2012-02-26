@@ -276,20 +276,14 @@ func maxPriorityPCB() *PCB {
 // main program
 func main() {
 	flag.Parse()
-
 	in := bufio.NewReader(os.Stdin)
 
 	// REPL mode
 	if *terminal {
 		initialize()
 
-		var (
-			i   string
-			err os.Error
-		)
-
 		for {
-			i, err = in.ReadString('\n')
+			i, err := in.ReadString('\n')
 			if err != nil {
 				fmt.Println("Read error:", err)
 			}
@@ -303,32 +297,27 @@ func main() {
 		}
 	// File mode
 	} else {
-		var (
-			tmp        string
-			error, err os.Error
-			file       *os.File
-			lines      []string
-			filepath       string
-		)
-
 		// get the file path
-		filepath, err = in.ReadString('\n')
-		if err != nil {
-			fmt.Println("Read error:", err)
-		}
+		fmt.Println("Give me a file path:")
+		filepath, _ := in.ReadString('\n')
 		filepath = strings.TrimSpace(filepath)
 		// open the file
-		if file, err = os.Open(filepath); err != nil {
+		file, err := os.Open(filepath)
+		if err != nil {
 			fmt.Println("File open error:", err)
+			panic(err)
 		}
 		// declare a new file reader
 		reader := bufio.NewReader(file)
 		// load each command into a slice named lines
+		var lines []string
 		for {
-			if tmp, error = reader.ReadString('\n'); error == nil {
+			tmp, error := reader.ReadString('\n')
+			if error == nil {
 				tmp = strings.TrimSpace(tmp)
 				lines = append(lines, tmp)
 			}
+			// end of file, break
 			if error == os.EOF {
 				break
 			}

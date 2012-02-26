@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"bufio"
+	"flag"
 	"os"
 	"strings"
 	"strconv"
@@ -65,7 +66,7 @@ func (p *PCB) Create(name string, priority int) os.Error {
 
 	PIDs[name] = &newP // add to PID name records
 	p.Creation_Tree.Child.PushFront(&newP)
-	fmt.Printf("process %s | %v\n", p.PID, p.Creation_Tree.Child.Len())
+	//fmt.Printf("process %s | %v\n", p.PID, p.Creation_Tree.Child.Len())
 	listRLInsert(&newP)
 	Scheduler()
 
@@ -141,14 +142,20 @@ func (p *PCB) Request(rid string) {
 
 // release a resource
 func (p *PCB) Release(rid string) {
+	//fmt.Println("R1")
 	r := getRCB(rid)
-	pcb := r.Waiting_List.Front().Value.(*PCB)
-	rcbListRemove(r, pcb.Other_Resources)
+	//fmt.Println("R2")
 	if r.Waiting_List.Len() == 0 {
 		r.Status = "free"
+		//fmt.Println("R5")
 	} else {
+		pcb := r.Waiting_List.Front().Value.(*PCB)
+		rcbListRemove(r, pcb.Other_Resources)
+		//fmt.Println("R6")
 		r.Waiting_List.Remove(r.Waiting_List.Front()) // remove front
+		//fmt.Println("R7")
 		pcb.Status.Type = "ready_a"
+		//fmt.Println("R8")
 		pcb.Status.List = Ready_List
 		listRLInsert(pcb)
 	}
@@ -193,13 +200,13 @@ func (p *PCB) IO_completion() {
 // also prints state
 func Scheduler() {
 	p := maxPriorityPCB()
-	fmt.Println("Top process:", p.PID)
+	//fmt.Println("Top process:", p.PID)
 	if Curr == nil || Curr.Status.Type != "running" || Curr.Priority < p.Priority {
 		preempt(p, Curr)
 	}
 	// print state
 	fmt.Printf("Process %s is running\n", Curr.PID)
-	showRL()
+	//showRL()
 }
 
 // preempt function used in scheduler
@@ -275,6 +282,7 @@ func maxPriorityPCB() *PCB {
 // current running process and init process
 var Curr, Init *PCB
 var IO *IO_RCB
+var terminal = flag.Bool("t", false, "use terminal mode for input")
 var (
 	PIDs          = make(map[string]*PCB) // keeps track of all processes
 	Ready_List    = list.New()
@@ -283,24 +291,68 @@ var (
 
 // main program
 func main() {
-	i := ""
-	var err os.Error
-	in := bufio.NewReader(os.Stdin)
-	initialize()
+	flag.Parse()
 
-	for {
+	var (
+		i string
+		file *os.File
+		err os.Error
+		lines []string
+	)
+	in := bufio.NewReader(os.Stdin)
+
+	// REPL mode
+	if *terminal {
+		initialize()
+		for {
+			i, err = in.ReadString('\n')
+			if err != nil {
+				fmt.Println("Read error:", err)
+			}
+			i = strings.TrimSpace(i)
+
+			if i == "quit" && len(strings.Split(i, " ")) == 1 {
+				fmt.Println("process terminated")
+				break
+			}
+			Manager(i)
+		}
+	// file mode
+	} else {
+		var (
+			tmp string
+			error os.Error
+		)
+
 		i, err = in.ReadString('\n')
 		if err != nil {
-			fmt.Println("Read error: ", err)
+			fmt.Println("Read error:", err)
 		}
 		i = strings.TrimSpace(i)
-
-		if i == "quit" && len(strings.Split(i, " ")) == 1 {
-			fmt.Println("process terminated")
-			break
+		if file, err = os.Open(i); err != nil {
+			fmt.Println("File open error:", err)
 		}
-		Manager(i)
+
+		reader := bufio.NewReader(file)
+
+		for {
+			if tmp, error = reader.ReadString('\n'); error == nil {
+				tmp = strings.TrimSpace(tmp)
+				lines = append(lines, tmp)
+			}
+			if error == os.EOF { break }
+			if error != nil { fmt.Println("Readline error:", error); break }
+		}
+
+		initialize()
+		for _, v := range lines {
+			//fmt.Println(v)
+			Manager(v)
+		}
+
+
 	}
+
 }
 
 // Helper functions
@@ -334,6 +386,7 @@ func initialize() {
 	Resource_List.PushFront(&RCB{"R1", "free", list.New()})
 	Resource_List.PushFront(&RCB{"R2", "free", list.New()})
 	Resource_List.PushFront(&RCB{"R3", "free", list.New()})
+	Resource_List.PushFront(&RCB{"R4", "free", list.New()})
 
 	fmt.Println(" ... done\nProcess init is running")
 }
@@ -363,6 +416,11 @@ func Manager(cmd string) {
 		Curr.Request_IO()
 	case ins == "ioc" && len(cmds) == 1:
 		Curr.IO_completion()
+	case ins == "\n" && len(cmds) == 1:
+		fmt.Println(ins)
+	case ins == "quit" && len(cmds) == 1:
+		fmt.Println("process terminated")
+		break
 	default:
 		fmt.Println("Unknown command")
 	}

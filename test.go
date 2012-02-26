@@ -10,6 +10,12 @@ import (
 	"container/list"
 )
 
+/* Matriculation number: U096996N
+CS2106 Project Assignment 1
+This program is written in Go.
+Compiled using the 6g compiler version release.r60.3 9516+ on Darwin
+*/
+
 // Structs
 type Stat struct {
 	Type string
@@ -114,7 +120,7 @@ func killTree(p *PCB) {
 
 	// release all resources associated with p
 	for e := p.Other_Resources.Front(); e != nil; e = e.Next() {
-		p.Release(e.Value.(*RCB).RID)
+		p.release(e.Value.(*RCB).RID)
 	}
 
 	PIDs[p.PID] = nil, false
@@ -142,6 +148,13 @@ func (p *PCB) Request(rid string) {
 
 // release a resource
 func (p *PCB) Release(rid string) {
+	p.release(rid)
+	Scheduler()
+}
+
+// release a resource, without call to scheduler
+// for internal use only, by Destroy
+func (p *PCB) release(rid string) {
 	//fmt.Println("R1")
 	r := getRCB(rid)
 	//fmt.Println("R2")
@@ -159,7 +172,6 @@ func (p *PCB) Release(rid string) {
 		pcb.Status.List = Ready_List
 		listRLInsert(pcb)
 	}
-	Scheduler()
 }
 
 // timeout function
@@ -293,17 +305,15 @@ var (
 func main() {
 	flag.Parse()
 
-	var (
-		i string
-		file *os.File
-		err os.Error
-		lines []string
-	)
 	in := bufio.NewReader(os.Stdin)
 
 	// REPL mode
 	if *terminal {
 		initialize()
+		var (
+			i   string
+			err os.Error
+		)
 		for {
 			i, err = in.ReadString('\n')
 			if err != nil {
@@ -317,40 +327,49 @@ func main() {
 			}
 			Manager(i)
 		}
-	// file mode
+		// file mode
 	} else {
 		var (
-			tmp string
-			error os.Error
+			tmp        string
+			error, err os.Error
+			file       *os.File
+			lines      []string
+			path       string
 		)
 
-		i, err = in.ReadString('\n')
+		// get the file path
+		path, err = in.ReadString('\n')
 		if err != nil {
 			fmt.Println("Read error:", err)
 		}
-		i = strings.TrimSpace(i)
-		if file, err = os.Open(i); err != nil {
+		// open the file
+		path = strings.TrimSpace(path)
+		if file, err = os.Open(path); err != nil {
 			fmt.Println("File open error:", err)
 		}
-
+		// declare a new file reader
 		reader := bufio.NewReader(file)
-
+		// load each command into a slice named line
 		for {
 			if tmp, error = reader.ReadString('\n'); error == nil {
 				tmp = strings.TrimSpace(tmp)
 				lines = append(lines, tmp)
 			}
-			if error == os.EOF { break }
-			if error != nil { fmt.Println("Readline error:", error); break }
+			if error == os.EOF {
+				break
+			}
+			if error != nil {
+				fmt.Println("Readline error:", error)
+				break
+			}
 		}
-
+		// initialize the kernel environment
 		initialize()
+		// for each command, process it
 		for _, v := range lines {
 			//fmt.Println(v)
 			Manager(v)
 		}
-
-
 	}
 
 }
@@ -416,8 +435,8 @@ func Manager(cmd string) {
 		Curr.Request_IO()
 	case ins == "ioc" && len(cmds) == 1:
 		Curr.IO_completion()
-	case ins == "\n" && len(cmds) == 1:
-		fmt.Println(ins)
+	case ins == "" && len(cmds) == 1:
+		fmt.Println("")
 	case ins == "quit" && len(cmds) == 1:
 		fmt.Println("process terminated")
 		break

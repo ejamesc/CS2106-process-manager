@@ -137,7 +137,7 @@ func killTree(p *PCB) {
 	for e := p.Other_Resources.Front(); e != nil; e = e.Next() {
 		p.release(e.Value.(*RCB).RID)
 	}
-
+	// remove PID and PCB pointer from map 'PIDs'
 	PIDs[p.PID] = nil, false
 }
 
@@ -293,7 +293,7 @@ func main() {
 			}
 			Manager(i)
 		}
-		// file mode
+	// file mode
 	} else {
 		var (
 			tmp        string

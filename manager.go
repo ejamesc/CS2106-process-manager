@@ -48,6 +48,17 @@ type IO_RCB struct {
 	Waiting_List *list.List
 }
 
+// Global Variables
+// current running process and init process
+var Curr, Init *PCB
+var IO *IO_RCB
+var terminal = flag.Bool("t", false, "use terminal mode for input")
+var (
+	PIDs          = make(map[string]*PCB) // keeps track of all processes
+	Ready_List    = list.New()
+	Resource_List = list.New()
+)
+
 // Operations on processes
 // init for PCB, rarely used
 func (p *PCB) Init() *PCB {
@@ -254,17 +265,6 @@ func maxPriorityPCB() *PCB {
 	return Init // return init
 }
 
-// Global Variables
-// current running process and init process
-var Curr, Init *PCB
-var IO *IO_RCB
-var terminal = flag.Bool("t", false, "use terminal mode for input")
-var (
-	PIDs          = make(map[string]*PCB) // keeps track of all processes
-	Ready_List    = list.New()
-	Resource_List = list.New()
-)
-
 // main program
 func main() {
 	flag.Parse()
@@ -293,7 +293,7 @@ func main() {
 			}
 			Manager(i)
 		}
-	// file mode
+		// file mode
 	} else {
 		var (
 			tmp        string
